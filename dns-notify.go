@@ -4,12 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/ant0ine/go-json-rest/rest"
 	"github.com/miekg/dns"
 )
 
@@ -31,7 +29,6 @@ var (
 	verbose    = flag.Bool("verbose", false, "Be extra verbose")
 	quiet      = flag.Bool("quiet", false, "Only output on errors")
 	timeout    = flag.Int64("timeout", 2000, "Timeout for response (in milliseconds)")
-	listen     = flag.String("listen", "", "Listen on this ip:port for the HTTP API")
 )
 
 var servers []string
@@ -42,62 +39,13 @@ func main() {
 
 	servers = flag.Args()
 
-	if len(*domainFlag) == 0 && len(*listen) == 0 {
-		fmt.Printf("-listen or -domain parameter required\n\n")
+	if len(*domainFlag) == 0 {
+		fmt.Printf("-domain parameter required\n\n")
 		flag.Usage()
 		os.Exit(2)
 	}
 
-	if len(*listen) == 0 {
-		sendNotify(servers, *domainFlag)
-		return
-	}
-
-	startHTTP(*listen)
-}
-
-func buildMux() *http.ServeMux {
-
-	mux := http.NewServeMux()
-
-	restHandler := rest.ResourceHandler{}
-	restHandler.EnableGzip = true
-	restHandler.EnableLogAsJson = true
-	restHandler.EnableResponseStackTrace = true
-	//restHandler.EnableStatusService = true
-
-	restHandler.SetRoutes(
-		&rest.Route{"POST", "/api/v1/notify/*domain", notifyHandler},
-	)
-
-	mux.Handle("/api/v1/", &restHandler)
-
-	return mux
-
-}
-
-func startHTTP(listen string) {
-	fmt.Printf("Listening on http://%s\n", listen)
-	err := http.ListenAndServe(listen, buildMux())
-	fmt.Printf("Could not listen to %s: %s", listen, err)
-}
-
-func notifyHandler(w rest.ResponseWriter, r *rest.Request) {
-
-	domain := r.PathParam("domain")
-
-	resp := new(apiNotifyResponse)
-
-	resp.Result = sendNotify(servers, domain)
-
-	for _, r := range resp.Result {
-		if r.Error {
-			resp.Error = r.Result
-		}
-	}
-
-	w.WriteJson(resp)
-
+	sendNotify(servers, *domainFlag)
 }
 
 func sendNotify(servers []string, domain string) []NotifyResponse {
